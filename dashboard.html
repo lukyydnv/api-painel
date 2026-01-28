@@ -602,7 +602,7 @@
     </div>
 
     <script>
-        const API_URL = "https://api-painel-eight.vercel.app"
+        const API_URL = "https://api-painel-eight.vercel.app/"
 
         let adminKey = null;
         let allKeys = [];
@@ -630,8 +630,8 @@
             event.preventDefault();
             const key = document.getElementById('adminKey').value;
             
-            if (!key || key.length < 6) {
-                showError('Minimum 6 characters');
+            if (!key) {
+                showError('Key Errada');
                 return;
             }
             
