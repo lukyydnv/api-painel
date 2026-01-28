@@ -712,15 +712,25 @@
 
         async function refreshStats() {
             try {
-                const res = await fetch(`${API_URL}/api/stats`, {
-                    headers: { 'Authorization': `Bearer ${adminKey}` }
+                const res = await fetch(`${API_URL}/api/keys/stats`, {
+                    headers: {
+                        'Authorization': `Bearer ${adminKey}`
+                    }
                 });
+
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+
                 const stats = await res.json();
                 renderStats(stats);
+
             } catch (e) {
                 console.error('Error loading stats:', e);
+                showNotification('Erro ao carregar estatísticas', 'error');
             }
         }
+
 
         function renderKeysTable(keys) {
             const tbody = document.getElementById('keysTableBody');
