@@ -814,11 +814,16 @@
         async function handleCreateKey(event) {
             event.preventDefault();
 
-            const name = document.getElementById('userName').value;
-            const count = parseInt(document.getElementById('keyCount').value);
+            const name = document.getElementById('userName').value.trim();
+            const count = parseInt(document.getElementById('keyCount').value, 10);
+
+            if (!name || !count || count <= 0) {
+                showNotification('Nome ou quantidade inválida', 'error');
+                return;
+            }
 
             try {
-                const res = await fetch(`${API_URL}/api/keys/create`, {
+                const res = await fetch('/api/keys/create', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${adminKey}`,
@@ -827,20 +832,44 @@
                     body: JSON.stringify({ name, count })
                 });
 
+                // ❌ erro de auth ou método
+                if (!res.ok) {
+                    if (res.status === 401) {
+                        showNotification('Admin key inválida', 'error');
+                    } else if (res.status === 405) {
+                        showNotification('Endpoint não permite POST', 'error');
+                    } else {
+                        showNotification('Erro ao criar keys', 'error');
+                    }
+                    return;
+                }
+
                 const data = await res.json();
+
+                // 🔐 blindagem total
+                if (!data || !Array.isArray(data.keys)) {
+                    showNotification('Resposta inválida da API', 'error');
+                    return;
+                }
+
                 createdKeys = data.keys;
 
+                // UI
                 document.getElementById('createKeyForm').style.display = 'none';
                 document.getElementById('createdKeysResult').style.display = 'block';
+
                 document.getElementById('createdKeysList').innerHTML =
                     createdKeys.map(k => `<div>${k}</div>`).join('');
 
-                showNotification(`${count} key(s) created!`, 'success');
+                showNotification(`${createdKeys.length} key(s) criada(s)!`, 'success');
                 refreshData();
+
             } catch (e) {
-                showNotification('Error creating keys', 'error');
+                console.error(e);
+                showNotification('Erro de conexão com o servidor', 'error');
             }
         }
+
 
         function showNotification(msg, type) {
             const n = document.createElement('div');
