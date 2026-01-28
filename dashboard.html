@@ -602,9 +602,7 @@
     </div>
 
     <script>
-        const API_URL = window.location.origin === 'file://' ? 
-            'http://localhost:3000' : 
-            localStorage.getItem('apiUrl') || prompt('Enter API URL:', 'https://your-vercel-url.vercel.app');
+        const API_URL = "https://api-painel-eight.vercel.app/"
 
         let adminKey = null;
         let allKeys = [];
