@@ -617,97 +617,239 @@
     </div>
 
     <script>
-        const API_URL = ""; // mesmo domínio
+        const API_URL = ""
 
-        let adminKey = null;
+        let adminKey = "hakaiadmin";
         let allKeys = [];
         let createdKeys = [];
 
-        /* ---------- LOGIN ---------- */
-        window.addEventListener("DOMContentLoaded", () => {
-            const saved = localStorage.getItem("hakai_admin_token");
-            if (saved) {
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('hakai_admin_token');
+            if (saved && saved !== 'undefined' && saved !== '') {
                 adminKey = saved;
+                localStorage.setItem('apiUrl', API_URL);
                 showMainApp();
                 refreshData();
+                setInterval(refreshData, 5000);
             } else {
                 showLoginPage();
             }
+
+            const search = document.getElementById('searchInput');
+            if (search) {
+                search.addEventListener('input', filterKeys);
+            }
         });
 
-        function handleLogin(e) {
-            e.preventDefault();
-            adminKey = document.getElementById("adminKey").value.trim();
-            if (!adminKey) return showError("Chave inválida");
-            localStorage.setItem("hakai_admin_token", adminKey);
+        function handleLogin(event) {
+            event.preventDefault();
+            const key = document.getElementById('adminKey').value;
+
+            if (!key) {
+                showError('Key Errada');
+                return;
+            }
+
+            adminKey = key;
+            localStorage.setItem('hakai_admin_token', key);
+            localStorage.setItem('apiUrl', API_URL);
             showMainApp();
             refreshData();
+            setInterval(refreshData, 5000);
         }
 
         function logout() {
-            localStorage.removeItem("hakai_admin_token");
+            adminKey = null;
+            localStorage.removeItem('hakai_admin_token');
             location.reload();
         }
 
-        /* ---------- UI ---------- */
         function showLoginPage() {
-            document.getElementById("loginPage").style.display = "flex";
+            document.getElementById('loginPage').classList.remove('hidden');
         }
 
         function showMainApp() {
-            document.getElementById("loginPage").style.display = "none";
-            document.getElementById("mainApp").style.display = "flex";
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainApp').style.display = 'flex';
         }
 
-        /* ---------- API ---------- */
-        async function refreshData() {
-            await refreshKeys();
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.menu-link').forEach(l => l.classList.remove('active'));
+
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            event.target.classList.add('active');
+
+            const titles = {
+                keys: 'Keys Management',
+                create: 'Create New Keys',
+                stats: 'Statistics'
+            };
+            document.getElementById('pageTitle').textContent = titles[tabName];
+
+            if (tabName === 'stats') refreshStats();
+        }
+
+        function refreshData() {
+            refreshKeys();
         }
 
         async function refreshKeys() {
             try {
-                const res = await fetch("/api/keys", {
-                    headers: { Authorization: `Bearer ${adminKey}` }
+                const res = await fetch(`${API_URL}/api/keys`, {
+                    headers: { 'Authorization': `Bearer ${adminKey}` }
                 });
-
-                if (!res.ok) {
-                    console.error("API error:", res.status);
-                    allKeys = [];
-                    renderKeysTable([]);
-                    return;
-                }
-
                 const data = await res.json();
-
-                // 👉 SUA API retorna ARRAY
-                if (!Array.isArray(data)) {
-                    console.error("Resposta inválida:", data);
-                    allKeys = [];
-                    renderKeysTable([]);
-                    return;
-                }
-
-                allKeys = data;
+                allKeys = Object.entries(data).map(([key, value]) => ({
+                    key,
+                    ...value
+                }));
                 renderKeysTable(allKeys);
-
-            } catch (err) {
-                console.error("Fetch error:", err);
-                renderKeysTable([]);
+            } catch (e) {
+                console.error('Error loading keys:', e);
             }
         }
 
-        async function deleteKey(key) {
-            if (!confirm("Deletar esta key?")) return;
-
-            await fetch(`/api/keys/${key}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${adminKey}` }
-            });
-
-            refreshKeys();
+        async function refreshStats() {
+            try {
+                const res = await fetch(`${API_URL}/api/stats`, {
+                    headers: { 'Authorization': `Bearer ${adminKey}` }
+                });
+                const stats = await res.json();
+                renderStats(stats);
+            } catch (e) {
+                console.error('Error loading stats:', e);
+            }
         }
 
-        /* ---------- RENDER ---------- */
+        function renderKeysTable(keys) {
+            const tbody = document.getElementById('keysTableBody');
+            if (!keys || keys.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">No keys found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = keys.map(k => `
+                <tr>
+                    <td><span class="key-code">${k.key.substring(0, 16)}...</span></td>
+                    <td>${k.name || 'N/A'}</td>
+                    <td><span class="status-badge status-${k.status}">${k.status.toUpperCase()}</span></td>
+                    <td>${k.hwid ? k.hwid.substring(0, 16) + '...' : '-'}</td>
+                    <td>${new Date(k.created_at).toLocaleDateString('en-US')}</td>
+                    <td>
+                        <div class="actions">
+                            <button class="btn-icon" onclick="copyToClipboard('${k.key}')" title="Copy">C</button>
+                            <button class="btn-icon delete" onclick="deleteKey('${k.key}')" title="Delete">D</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterKeys() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allKeys.filter(k =>
+                k.key.toLowerCase().includes(search) ||
+                (k.name || '').toLowerCase().includes(search)
+            );
+            renderKeysTable(filtered);
+        }
+
+        function renderStats(stats) {
+            const grid = document.getElementById('statsGrid');
+            grid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-label">Total Keys</div>
+                    <div class="stat-value">${stats.total_keys}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Available</div>
+                    <div class="stat-value">${stats.available}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Used</div>
+                    <div class="stat-value">${stats.used}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Expired</div>
+                    <div class="stat-value">${stats.expired}</div>
+                </div>
+            `;
+
+            const summary = document.getElementById('statsSummary');
+            summary.innerHTML = `
+                <p>Total: <strong>${stats.total_keys}</strong> keys</p>
+                <p>Available: <strong>${stats.available}</strong></p>
+                <p>Used: <strong>${stats.used}</strong></p>
+            `;
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification('Key copied!', 'success');
+            });
+        }
+
+        function copyAllKeys() {
+            const text = createdKeys.join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification('All keys copied!', 'success');
+            });
+        }
+
+        async function deleteKey(key) {
+            if (!confirm('Delete this key?')) return;
+            try {
+                await fetch(`${API_URL}/api/keys/${key}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${adminKey}` }
+                });
+                showNotification('Key deleted!', 'success');
+                refreshData();
+            } catch (e) {
+                showNotification('Error deleting key', 'error');
+            }
+        }
+
+        async function handleCreateKey(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('userName').value;
+            const count = parseInt(document.getElementById('keyCount').value);
+
+            try {
+                const res = await fetch(`${API_URL}/api/keys/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${adminKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, count })
+                });
+
+                const data = await res.json();
+                createdKeys = data.keys;
+
+                document.getElementById('createKeyForm').style.display = 'none';
+                document.getElementById('createdKeysResult').style.display = 'block';
+                document.getElementById('createdKeysList').innerHTML =
+                    createdKeys.map(k => `<div>${k}</div>`).join('');
+
+                showNotification(`${count} key(s) created!`, 'success');
+                refreshData();
+            } catch (e) {
+                showNotification('Error creating keys', 'error');
+            }
+        }
+
+        function showNotification(msg, type) {
+            const n = document.createElement('div');
+            n.className = `notification ${type}`;
+            n.textContent = msg;
+            document.body.appendChild(n);
+            setTimeout(() => n.remove(), 3000);
+        }
+
         function renderKeysTable(keys) {
             const tbody = document.getElementById("keysTableBody");
             if (!keys.length) {
@@ -733,9 +875,9 @@
         }
 
         function showError(msg) {
-            const el = document.getElementById("loginError");
-            el.textContent = msg;
-            el.style.display = "block";
+            const err = document.getElementById('loginError');
+            err.textContent = msg;
+            err.classList.add('show');
         }
     </script>
 </body>
