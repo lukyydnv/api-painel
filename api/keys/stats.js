@@ -1,7 +1,7 @@
-import { supabase, ADMIN_KEY, ALLOWED_ORIGIN } from '../lib/supabase.js';
+import { supabase, ADMIN_KEY, ALLOWED_ORIGIN } from '../../lib/supabase.js';
 
 export default async function handler(req, res) {
-  // 🔐 CORS
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -10,30 +10,50 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 🔑 Auth
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Auth
   const auth = req.headers.authorization || '';
-  if (auth.replace('Bearer ', '') !== ADMIN_KEY) {
+  const token = auth.replace('Bearer ', '');
+
+  if (token !== ADMIN_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
-    const { data, error } = await supabase
+    // Total de keys
+    const { count: total, error: totalError } = await supabase
       .from('keys')
-      .select('status');
+      .select('*', { count: 'exact', head: true });
 
-    if (error) {
-      return res.status(500).json({ error: 'Database error' });
-    }
+    if (totalError) throw totalError;
 
-    const stats = {
-      total_keys: data.length,
-      available: data.filter(k => k.status === 'available').length,
-      used: data.filter(k => k.status === 'used').length,
-      expired: data.filter(k => k.status === 'expired').length
-    };
+    // Keys ativas
+    const { count: active, error: activeError } = await supabase
+      .from('keys')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active');
 
-    return res.status(200).json(stats);
-  } catch (e) {
-    return res.status(500).json({ error: 'Internal error' });
+    if (activeError) throw activeError;
+
+    // Keys expiradas
+    const { count: expired, error: expiredError } = await supabase
+      .from('keys')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'expired');
+
+    if (expiredError) throw expiredError;
+
+    return res.status(200).json({
+      total: total ?? 0,
+      active: active ?? 0,
+      expired: expired ?? 0
+    });
+
+  } catch (err) {
+    console.error('STATS ERROR:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }
