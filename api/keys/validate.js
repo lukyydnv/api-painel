@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     }
 
     // Status inválido
-    if (data.status && data.status !== 'active') {
+    if (data.status && data.status !== 'available') {
       return res.status(401).json({
         valid: false,
         message: 'Key inativa ou expirada'
@@ -80,3 +80,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
